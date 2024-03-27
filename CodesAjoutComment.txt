@@ -1,0 +1,543 @@
+Nom du fichier : dev.php 
+<?php 
+const HOST = 'localhost'; 
+const DB_NAME = 'blogg'; 
+const CHARSET = 'utf8'; 
+const DB_HOST = 'mysql:host=localhost;dbname=blogg;charset=utf8'; 
+const DB_USER = 'root'; 
+const DB_PASS = ''; 
+Nom du fichier : Router.php 
+<?php 
+namespace App\config; 
+use App\src\controller\ErrorController; 
+use App\src\controller\FrontController; 
+use Exception; 
+class Router 
+{ 
+    private $frontController; 
+    public function __construct() 
+    { 
+        $this->frontController = new FrontController(); 
+        $this->ErrorController = new ErrorController(); 
+    } 
+    public function run() 
+    { 
+        try{ 
+            if(isset($_GET['route'])) 
+            { 
+                if($_GET['route'] === 'article'){ 
+                    $this->frontController->article($_GET['articleId']); 
+                }else if($_GET['route'] === 'addComment') { 
+                    if (!empty($_POST['pseudo']) && !empty($_POST['content'])) { 
+                        $this->frontController->addComment($_GET['articleId'], $_POST['pseudo'], $_POST['content']); 
+                    } 
+                } 
+                else{ 
+                    $this->ErrorController->errorNotFound(); 
+                } 
+            } 
+            else{ 
+                $this->frontController->home(); 
+            } 
+        } 
+        catch (Exception $e) 
+        { 
+            $this->ErrorController->errorServer(); 
+        } 
+    } 
+} 
+Nom du fichier : index.php 
+<?php 
+require '../config/dev.php'; 
+require '../vendor/autoload.php'; 
+$router = new \App\config\Router(); 
+$router->run(); 
+Nom du fichier : ErrorController.php 
+<?php 
+namespace App\src\controller; 
+use App\src\DAO\ArticleDAO; 
+class ErrorController 
+{ 
+    public function errorNotFound() 
+    { 
+        require '../templates/error_404.php'; 
+    } 
+    public function errorServer() 
+    { 
+        require '../templates/error_500.php'; 
+    } 
+} 
+Nom du fichier : FrontController.php 
+<?php 
+namespace App\src\controller; 
+use App\src\DAO\ArticleDAO; 
+use App\src\DAO\CommentDAO; 
+use App\src\models\View; 
+class FrontController 
+{ 
+    private $articleDAO; 
+    private $commentDAO; 
+    private $view; 
+    public function __construct() 
+    { 
+        $this->articleDAO = new ArticleDAO(); 
+        $this->commentDAO = new CommentDAO(); 
+        $this->view = new View(); 
+    } 
+    public function home() 
+    { 
+        $articles = $this->articleDAO->getArticles(); 
+        return $this->view->render('home', ['articles' => $articles]); 
+    } 
+    public function article($articleId) 
+    { 
+        $article = $this->articleDAO->getArticle($articleId); 
+        $comments = $this->commentDAO->getComment($articleId); 
+        return $this->view->render('single', ['article' => $article, 'comments' => $comments]); 
+    } 
+    public function addComment($articleId, $pseudo, $content) 
+    { 
+        if (!$this->validateCommentData($articleId, $pseudo, $content)) { 
+            $this->errorController->errorNotFound(); 
+            return; 
+        } 
+        $this->commentDAO->addComment($articleId, $pseudo, $content); 
+// Rediriger vers l'article pour voir le commentaire ajouté 
+        header('Location: index.php?route=article&articleId=' . $articleId); 
+        exit; 
+    } 
+    private function validateCommentData($articleId, $pseudo, $content) { 
+        return !empty($pseudo) && !empty($content) && !empty($articleId) && $_SERVER['REQUEST_METHOD'] === 'POST'; 
+    } 
+} 
+Nom du fichier : ArticleDAO.php 
+<?php 
+namespace App\src\DAO; 
+use App\src\models\Article; 
+class ArticleDAO extends DAO 
+{ 
+    private function buildObject($row) 
+    { 
+        $article = new Article(); 
+        $article->setId($row['id']); 
+        $article->setTitle($row['title']); 
+        $article->setContent($row['content']); 
+        $article->setAuthor($row['author']); 
+        $article->setCreatedAt($row['createdAt']); 
+        return $article; 
+    } 
+    public function getArticles() 
+    { 
+        $sql = 'SELECT id, title, content, author, createdAt FROM article 
+ORDER BY id DESC'; 
+        $result = $this->createQuery($sql); 
+        $articles = []; 
+        foreach ($result as $row){ 
+            $articleId = $row['id']; 
+            $articles[$articleId] = $this->buildObject($row); 
+        } 
+        $result->closeCursor(); 
+        return $articles; 
+    } 
+    public function getArticle($articleId) 
+    { 
+        $sql = 'SELECT id, title, content, author, createdAt FROM article 
+WHERE id = ?'; 
+        $result = $this->createQuery($sql, [$articleId]); 
+        $article = $result->fetch(); 
+        $result->closeCursor(); 
+        return $this->buildObject($article); 
+    } 
+} 
+Nom du fichier : CommentDAO.php 
+<?php 
+namespace App\src\DAO; 
+use App\src\models\Comment; 
+class CommentDAO extends DAO 
+{ 
+    private function buildObject($row) 
+    { 
+        $comment = new Comment(); 
+        $comment -> setId($row['id']); 
+        $comment -> setPseudo($row['pseudo']); 
+        $comment -> setContent($row['content']); 
+        $comment -> setCreatedAt($row['createdAt']); 
+        $comment -> setArticleId($row['article_id']); 
+        return $comment; 
+    } 
+    public function getComments() 
+    { 
+        $sql = 'SELECT id, pseudo, content, createdAt, article_id FROM comment 
+ORDER BY id DESC'; 
+        $result = $this->createQuery($sql); 
+        $comments = []; 
+        foreach ($result as $row){ 
+            $commentId = $row['id']; 
+            $comments[$commentId] = $this->buildObject($row); 
+        } 
+        $result->closeCursor(); 
+        return $comments; 
+    } 
+    public function getComment($commentId) 
+    { 
+        $sql = 'SELECT id, pseudo, content, createdAt, article_id FROM comment 
+WHERE article_id = ?'; 
+        $result = $this->createQuery($sql, [$commentId]); 
+        $comments = []; 
+        while ($comment = $result->fetch()){ 
+            $comments [] = $this->buildObject($comment); 
+        }; 
+        $result->closeCursor(); 
+        return $comments; 
+    } 
+    public function addComment($article_id, $pseudo, $content) 
+    { 
+        $sql = 'INSERT INTO comment (pseudo,content,createdAt,article_id) VALUES (?,?,NOW(),?)'; 
+        $this->createQuery($sql,[$pseudo,$content,$article_id]); 
+    } 
+} 
+Nom du fichier : DAO.php 
+<?php 
+namespace App\src\DAO; 
+use PDO; 
+use Exception; 
+abstract class DAO 
+{ 
+    private $connection; 
+    private function checkConnection() 
+    { 
+//Vérifie si la connexion est nulle et fait appel à getConnection() 
+        if($this->connection === null) { 
+            return $this->getConnection(); 
+        } 
+//Si la connexion existe, elle est renvoyée, inutile de refaire une connexion 
+return $this->connection; 
+} 
+//Méthode de connexion à notre base de données 
+    private function getConnection() 
+    { 
+//Tentative de connexion à la base de données 
+        try{ 
+            $this->connection = new PDO(DB_HOST, DB_USER, DB_PASS); 
+            $this->connection->setAttribute(PDO::ATTR_ERRMODE, 
+                PDO::ERRMODE_EXCEPTION); 
+//On renvoie la connexion 
+            return $this->connection; 
+        } 
+//On lève une erreur si la connexion échoue 
+        catch(Exception $errorConnection) 
+{ 
+    die ('Erreur de connection :'.$errorConnection->getMessage()); 
+} 
+} 
+    protected function createQuery($sql, $parameters = null) 
+    { 
+        if($parameters) 
+        { 
+            $result = $this->checkConnection()->prepare($sql); 
+            //$result->setFetchMode(PDO::FETCH_CLASS, static::class); 
+            $result->execute($parameters); 
+            return $result; 
+        } 
+        $result = $this->checkConnection()->query($sql); 
+        //$result->setFetchMode(PDO::FETCH_CLASS, static::class); 
+        return $result; 
+    } 
+} 
+Nom du fichier : Article.php 
+<?php 
+namespace App\src\models; 
+class Article 
+{ 
+    /** 
+     * @var int 
+     */ 
+    private $id; 
+    /** 
+     * @var string 
+     */ 
+    private $title; 
+    /** 
+     * @var string 
+     */ 
+    private $content; 
+    /** 
+     * @var string 
+     */ 
+    private $author; 
+    /** 
+     * @var \DateTime 
+     */ 
+    private $createdAt; 
+    /** 
+     * @return int 
+     */ 
+    public function getId() 
+    { 
+        return $this->id; 
+    } 
+    /** 
+     * @param int $id 
+     */ 
+    public function setId($id) 
+    { 
+        $this->id = $id; 
+    } 
+    /** 
+     * @return string 
+     */ 
+    public function getTitle() 
+    { 
+        return $this->title; 
+    } 
+    /** 
+     * @param string $title 
+     */ 
+    public function setTitle($title) 
+    { 
+        $this->title = $title; 
+    } 
+    /** 
+     * @return string 
+     */ 
+    public function getContent() 
+    { 
+        return $this->content; 
+    } 
+    /** 
+     * @param string $content 
+     */ 
+    public function setContent($content) 
+    { 
+        $this->content = $content; 
+    } 
+    /** 
+     * @return string 
+     */ 
+    public function getAuthor() 
+    { 
+        return $this->author; 
+    } 
+    /** 
+     * @param string $author 
+     */ 
+    public function setAuthor($author) 
+    { 
+        $this->author = $author; 
+    } 
+    /** 
+     * @return \DateTime 
+     */ 
+    public function getCreatedAt() 
+    { 
+        return $this->createdAt; 
+    } 
+    /** 
+     * @param \DateTime $createdAt 
+     */ 
+    public function setCreatedAt($createdAt) 
+    { 
+        $this->createdAt = $createdAt; 
+    } 
+} 
+Nom du fichier : Comment.php 
+<?php 
+namespace App\src\models; 
+class Comment 
+{ 
+    /** 
+     * @var int 
+     */ 
+    private $id; 
+    /** 
+     * @var string 
+     */ 
+    private $pseudo; 
+    /** 
+     * @var string 
+     */ 
+    private $content; 
+    /** 
+     * @var \DateTime 
+     */ 
+    private $createdAt; 
+    /** 
+     * @return int 
+     */ 
+    private $Article_id; 
+    /** 
+     * @return int 
+     */ 
+    public function getId() 
+    { 
+        return $this->id; 
+    } 
+    /** 
+     * @param int $id 
+     */ 
+    public function setId($id) 
+    { 
+        $this->id = $id; 
+    } 
+    /** 
+     * @return string 
+     */ 
+    public function getPseudo() 
+    { 
+        return $this->pseudo; 
+    } 
+    /** 
+     * @param string $pseudo 
+     */ 
+    public function setPseudo($pseudo) 
+    { 
+        $this->pseudo = $pseudo; 
+    } 
+    /** 
+     * @return string 
+     */ 
+    public function getContent() 
+    { 
+        return $this->content; 
+    } 
+    /** 
+     * @param string $content 
+     */ 
+    public function setContent($content) 
+    { 
+        $this->content = $content; 
+    } 
+    /** 
+     * @return \DateTime 
+     */ 
+    public function getCreatedAt() 
+    { 
+        return $this->createdAt; 
+    } 
+    /** 
+     * @param \DateTime $createdAt 
+     */ 
+    public function setCreatedAt($createdAt) 
+    { 
+        $this->createdAt = $createdAt; 
+    } 
+    /** 
+     * @return int 
+     */ 
+    public function getArticle_id() 
+    { 
+        return $this->Article_id; 
+    } 
+    /** 
+     * @param int $article_id 
+     */ 
+    public function setArticleId($article_id) 
+    { 
+        $this->Article_id = $article_id; 
+    } 
+} 
+Nom du fichier : View.php 
+<?php 
+namespace App\src\models; 
+class View 
+{ 
+    private $file; 
+    private $title; 
+    public function render($template, $data = []) 
+    { 
+        $this->file = '../templates/'.$template.'.php'; 
+        $content = $this->renderFile($this->file, $data); 
+        $view = $this->renderFile('../templates/base.php', [ 
+            'title' => $this->title, 
+            'content' => $content 
+        ]); 
+        echo $view; 
+    } 
+    private function renderFile($file, $data) 
+    { 
+        if(file_exists($file)){ 
+            extract($data); 
+            ob_start(); 
+            require $file; 
+            return ob_get_clean(); 
+        } 
+        header('Location: index.php?route=notFound'); 
+    } 
+} 
+Nom du fichier : base.php 
+<!DOCTYPE html> 
+<html lang="fr"> 
+<head> 
+<meta charset="UTF-8" /> 
+<title><?= $title ?></title> 
+</head> 
+<body> 
+<div id="content"> 
+    <?= $content ?> 
+</div> 
+</body> 
+</html> 
+Nom du fichier : FormComment.php 
+<!--    Formulaire HTML pour ajouter un commentaire --> 
+<form action="../index.php?route=addComment&articleId=<?= $articleId; ?>" method="post"> 
+    <label for="pseudo">Pseudo :</label><br> 
+    <input type="text" id="pseudo" name="pseudo" required 
+    value=<?= isset($post) ? htmlspecialchars($post->get('pseudo')) : '';?>><br><br> 
+    <label for="commentaire">Commentaire :</label><br> 
+    <textarea id="commentaire" name="content" rows="4" cols="50" required> 
+        <?= isset($post) ? htmlspecialchars($post->get('content')) : '' ?> 
+    </textarea><br><br> 
+    <input type="submit" value="Envoyer"> 
+</form> 
+Nom du fichier : home.php 
+<?php $this->title = "Accueil"; ?> 
+    <h1>Mon blog</h1> 
+    <p>En construction</p> 
+<?php 
+foreach ($articles as $article) 
+{ 
+    ?> 
+    <div> 
+        <h2><a href="../public/index.php?route=article&articleId=<?= 
+            htmlspecialchars($article->getId());?>"><?= 
+                htmlspecialchars($article->getTitle());?></a></h2> 
+        <p><?= htmlspecialchars($article->getContent());?></p> 
+        <p><?= htmlspecialchars($article->getAuthor());?></p> 
+        <p>Créé le : <?= htmlspecialchars($article->getCreatedAt());?></p> 
+    </div> 
+    <br> 
+    <?php 
+} 
+?> 
+Nom du fichier : single.php 
+<?php $this->title = "Article"; ?> 
+<h1>Mon blog</h1> 
+<p>En construction</p> 
+<div> 
+    <h2><?= htmlspecialchars($article->getTitle());?></h2> 
+    <p><?= htmlspecialchars($article->getContent());?></p> 
+    <p><?= htmlspecialchars($article->getAuthor());?></p> 
+    <p>Créé le : <?= htmlspecialchars($article->getCreatedAt());?></p> 
+</div> 
+<h2>Commentaire(s)</h2> 
+<?php 
+foreach ($comments as $comment) 
+{ 
+    ?> 
+    <h3><?=htmlspecialchars($comment->getPseudo()); ?></h3> 
+    <p><?= htmlspecialchars($comment->getContent()); ?></p> 
+    <p>Écrit le : <?= htmlspecialchars($comment->getCreatedAt()); ?></p> 
+    <?php 
+} 
+//include "FormComment.php"; 
+?> 
+<form action="../index.php?route=addComment&articleId=<?= $articleId; ?>" method="post"> 
+    <label for="pseudo">Pseudo :</label> 
+    <input type="text" id="pseudo" name="pseudo" required> 
+    <label for="commentaire">Commentaire :</label> 
+    <textarea id="commentaire" name="content" rows="4" cols="50" required> 
+    </textarea> 
+    <input type="submit" value="Envoyer"> 
+</form> 
+<br> 
+<a href="../public/index.php">Retour à l'accueil</a> 
