@@ -5,6 +5,7 @@ class ArticleDAO extends DAO
 {
     private function buildObject($row)
     {
+        // On "construit" notre article
         $article = new Article();
         $article->setId($row['id']);
         $article->setTitle($row['title']);
@@ -14,6 +15,7 @@ class ArticleDAO extends DAO
         return $article;
     }
 
+    //Permet d'afficher TOUS les articles
     public function getArticles()
     {
         $sql = 'SELECT id, title, content, author, createdAt FROM article
@@ -27,6 +29,7 @@ ORDER BY id DESC';
         $result->closeCursor();
         return $articles;
     }
+    // Récupère les id de chaque article, ce qui permet par la suite de les afficher individuellement
     public function getArticle($articleId)
     {
         $sql = 'SELECT id, title, content, author, createdAt FROM article

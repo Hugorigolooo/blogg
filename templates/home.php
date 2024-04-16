@@ -1,4 +1,5 @@
-<?php $this->title = "Accueil"; ?>
+<?php
+$this->title = "Accueil"; ?>
     <h1>Mon blog</h1>
     <p>En construction</p>
 <?php

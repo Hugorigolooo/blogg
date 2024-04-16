@@ -1,4 +1,10 @@
-<?php $this->title = "Article"; ?>
+<?php
+$this->title = "Article";
+use App\src\controller\FrontController;
+
+// Instanciation du FrontController pour utiliser la méthode generateCsrfToken()
+$frontController = new FrontController();
+$csrfToken = $frontController->generateCsrfToken();?>
 
 <h1>Mon blog</h1>
 <p>En construction</p>
@@ -23,7 +29,11 @@ foreach ($comments as $comment)
 //include "FormComment.php";
 
 ?>
+
+<!--Formulaire d'ajout d'un commentaire-->
 <form action="../public/index.php?route=addComment&articleId=<?= $article->getId(); ?>" method="post">
+    <!-- Insérer le champ de jeton CSRF -->
+    <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
     <label for="pseudo">Pseudo :</label>
     <input type="text" id="pseudo" name="pseudo" required>
     <label for="commentaire">Commentaire :</label>

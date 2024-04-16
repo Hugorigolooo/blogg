@@ -3,6 +3,7 @@ namespace App\config;
 use App\src\controller\ErrorController;
 use App\src\controller\FrontController;
 use Exception;
+
 class Router
 {
     private $frontController;
@@ -32,17 +33,6 @@ class Router
                 else{
                     $this->errorController->errorNotFound();
                 }
-
-
-//                else if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['pseudo']) && !empty($_POST['content']) && !empty($_GET['articleId'])) {
-//                    $articleId = $_GET['articleId'];
-//                    $pseudo = trim($_POST['pseudo']);
-//                    $content = trim($_POST['content']);
-//                    $this->frontController->addComment($articleId, $pseudo, $content);
-//                } else {
-//                    // Gérer l'erreur, en affichant un message d'erreur ou en renvoyant vers une page d'erreur.
-//                    $this->errorController->errorNotFound();
-//                }
 
             }
             else{
